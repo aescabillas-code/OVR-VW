@@ -1,0 +1,31 @@
+name: Keep Streamlit awake
+on:
+  schedule:
+    - cron: "0 */6 * * *"      # every 6 hours (sleep threshold is 12)
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install playwright && playwright install --with-deps chromium
+      - name: Visit the app
+        env:
+          APP_URL: ${{ secrets.STREAMLIT_APP_URL }}
+        run: |
+          python - <<'EOF'
+          import os
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              b = p.chromium.launch()
+              pg = b.new_page()
+              pg.goto(os.environ["APP_URL"], wait_until="domcontentloaded", timeout=120000)
+              try:  # click the wake-up button if the app is asleep
+                  pg.get_by_role("button", name="Yes, get this app back up!").click(timeout=15000)
+              except Exception:
+                  pass
+              pg.wait_for_timeout(60000)  # stay connected so it counts as a visit
+              b.close()
+          EOF
